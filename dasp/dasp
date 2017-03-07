@@ -1,0 +1,490 @@
+#!/bin/bash
+#
+# Dasp (Data spider) - is performing getting data for defined
+# period from any data source
+#
+# Style guide: https://google.github.io/styleguide/shell.xml
+#
+#_______________________________________________________________
+
+
+# INIT VARS AND CONST FUNCTIONS
+
+function init_program_vars() {
+
+  # Capsed vars in fx_getopt() will have been set as constants
+
+  DEBUG='false'
+  critical_error_flag=''
+
+  TMP_FILE=''
+
+  DATE_START=''
+  DATE_END=''
+  DATE_OFFSET=0
+
+  SRC_DATE_FORMAT=''
+  SRC_DATE_FIELD=''
+  SRC_DATA_FNAME=''
+  SRC_DATA_PATH=''
+  SRC_DATA_SEPAR=''
+  SRC_BY_MTIME='false'
+  
+  MONTHS_CUSTOM=''
+
+}
+
+function init_help_vars() {
+
+  # Section contains constants for build help and tips while execute
+
+  TIP_description="Dasp (Data spider) - bash script, provides get data for date range from
+  text sources, which are a fields, separated by some ASCII chars. One or
+  more of the fields must contains date - time in any format. For example
+  apache, nginx server logs, json format, syslogs, etc."
+
+  TIP_OPTION_s="-s | data source: directory contains data source"
+  TIP_OPTION_f="-f | data source: filenames pattern"
+  TIP_OPTION_d="-d | data source: fields separators"
+  TIP_OPTION_k="-k | data source: field(s), contains date/time"
+  TIP_OPTION_w="-w | data source: date format, recognized by \$date (without first +)"
+  TIP_OPTION_o="-o | data source: days offset (+/-) range while search files (optional)"
+  TIP_OPTION_M="-M | data source: user defined 12 months, separated by commas (optional)"
+  TIP_OPTION_r="-r | data source: only in date range by mtime (optional)"
+  TIP_OPTION_t="-t | other: use temp file for awk instead of memory (optional)"
+  TIP_OPTION_b="-b | other: show debug info (optional)"
+  TIP_OPTION_h="-h | other: show help info (optional)"
+  TIP_OPTION_date="-\$1 & \$2 set in any format recognized by \$(date) command"
+  
+  TIP_ver="1.05"
+  TIP_copyright="Ans Novoselov @ 2017"
+  TIP_contact="http://ans.sh or ans.novoselov@gmail.com"
+
+}
+
+# SYSTEM FUNCTIONS
+
+function sys_usage() {
+
+  echo "Usage: dasp [-options]... [date_start] [date_end]
+
+  Options:
+    ${TIP_OPTION_s}
+    ${TIP_OPTION_f}
+    ${TIP_OPTION_d}
+    ${TIP_OPTION_k}
+    ${TIP_OPTION_w}
+    ${TIP_OPTION_o}
+    ${TIP_OPTION_M}
+    ${TIP_OPTION_r}
+    ${TIP_OPTION_t}
+    ${TIP_OPTION_b}
+    
+  Positional parametrs:
+    ${TIP_OPTION_date}
+
+  Version:   ${TIP_ver}
+  Contact:   ${TIP_contact}"\
+  | sed 's/^\s\s//' 1>&2
+
+  exit 1
+}
+
+function sys_description() {
+
+  echo "${TIP_description}
+
+  For usage call: dasp -h
+
+  Version:   ${TIP_ver}
+  Contact:   ${TIP_contact}"\
+  | sed 's/^\s\s//' 1>&2
+
+  exit 1
+}
+
+function sys_error() {
+  [[ "$@" ]] && echo "err: $@" >&2
+  critical_error_flag="1"
+}
+
+function sys_tip() {
+  [[ "$@" ]] && echo "tip: $@" >&2
+}
+
+function sys_debug() {
+  [[ "${DEBUG}" == 'true' ]] && echo -e "dbg: $@" >&2
+}
+
+function sys_is_abort() {
+  if [[ "${critical_error_flag}" == 1 ]]; then
+    echo "tip: type ./dasp -h for usage"
+    echo "exit"
+    exit 1
+  fi
+}
+
+function sys_workdir() {
+  
+  # Solution from http://stackoverflow.com/a/697552/7489927
+
+  local source \
+        dir
+
+  source="${BASH_SOURCE[0]}"
+
+  while [ -h "$source" ]; do
+      dir="$( cd -P "$( dirname "$source" )" && pwd )"
+      source="$( readlink "$source" )"
+      [[ $source != /* ]] && source="$dir/$source"
+  done
+
+  dir="$( cd -P "$( dirname "$source" )" && pwd )"
+  
+  echo "$dir"
+  sys_debug "script dir: ${dir}"
+}
+
+# OPTIONS AND CHECKING FUNCTIONS
+
+function fx_getopts() {
+
+  local OPTIND \
+        flag
+
+  # Throw to description if no options are passed
+
+  if [[ -z "$@" ]]; then
+    sys_description
+  fi
+
+  # Get options
+
+  while getopts 'bhw:k:f:d:s:m:M:o:rt:p:' flag
+  do
+    case "${flag}" in
+    
+      b) DEBUG='true'
+         readonly DEBUG
+         ;;
+      t) TMP_FILE="${OPTARG}"
+         readonly TMP_FILE
+         ;;
+      k) SRC_DATE_FIELD="${OPTARG}"
+         readonly SRC_DATE_FIELD
+         ;;
+      f) SRC_DATA_FNAME="${OPTARG}"
+         readonly SRC_DATA_FNAME
+         ;;
+      d) SRC_DATA_SEPAR="${OPTARG}"
+         readonly SRC_DATA_SEPAR
+         ;;
+      w) SRC_DATE_FORMAT="${OPTARG}"
+         readonly SRC_DATE_FORMAT
+         ;;
+      s) SRC_DATA_PATH="${OPTARG}"
+         readonly SRC_DATA_PATH
+         ;;
+      M) MONTHS_CUSTOM="${OPTARG}"
+         readonly MONTHS_CUSTOM
+         ;;
+      o) DATE_OFFSET="${OPTARG}"
+         readonly DATE_OFFSET
+         ;;
+      r) SRC_BY_MTIME='true'
+         readonly SRC_BY_MTIME
+         ;;
+
+      h) sys_usage ;;
+      ?) sys_error ;;
+
+    esac
+  done
+  
+  sys_debug "script parametrs: $@";
+
+  # Get dates from positional parametrs
+
+  shift "$((OPTIND-1))"
+
+  [[ -n "$1" ]] && DATE_START="$1"
+  [[ -n "$2" ]] && DATE_END="$2"
+
+}
+
+function fx_check_required_options() {
+  
+  # Check required options
+
+  [[ -z "${SRC_DATE_FORMAT}" ]] && sys_error 'option -w is required' \
+                                && sys_tip "${TIP_OPTION_w}"
+  [[ -z "${SRC_DATE_FIELD}" ]]  && sys_error 'option -k is required' \
+                                && sys_tip "${TIP_OPTION_k}"
+  [[ -z "${SRC_DATA_FNAME}" ]]  && sys_error 'option -f is required' \
+                                && sys_tip "${TIP_OPTION_f}"
+  [[ -z "${SRC_DATA_SEPAR}" ]]  && sys_error 'option -d is required' \
+                                && sys_tip "${TIP_OPTION_d}"
+  [[ -z "${SRC_DATA_PATH}" ]]   && sys_error 'option -s is required' \
+                                && sys_tip "${TIP_OPTION_s}"
+  
+  # Check required positional parametrs
+
+  [[ -z "${DATE_START}" ]]  && sys_error '$1 as date_start is required' \
+                            && sys_tip "${TIP_OPTION_date}"
+  [[ -z "${DATE_END}" ]]    && sys_error '$2 as date_end is required' \
+                            && sys_tip "${TIP_OPTION_date}"
+  
+  # Abort if critical errors are here, before next step
+
+  sys_is_abort
+
+}
+
+function fx_data_validation() {
+
+  # Validation of tmp file
+
+  if [[ ! -z "${TMP_FILE}" ]]; then
+
+    if [[ -d "${TMP_FILE}" ]]; then
+      sys_error 'Option -t - should be not path'
+      sys_tip "${TIP_OPTION_t}"
+    fi
+    
+    truncate --size 0 "${TMP_FILE}" 2>/dev/null
+    if [[ "$?" != 0 ]]; then
+      sys_error 'Option -t - can`t create file'
+      sys_tip "${TIP_OPTION_t}"
+    fi
+
+    sys_debug "Use ${TMP_FILE} temp file"
+  else
+    sys_debug "Work without temp file"
+  fi
+
+  # Validation of path to source data
+
+  if [[ ! -d "${SRC_DATA_PATH}" ]]; then
+    sys_error 'Option -s - path is not exists'
+    sys_tip "${TIP_OPTION_s}"
+  fi
+
+  # Validation of date offset
+
+  if [[ "${DATE_OFFSET}" != 0 && ! "${DATE_OFFSET}" =~ ^[-+]?[0-9]+$ ]]; then
+    sys_error 'Option -o - isn`t digit'
+    sys_tip "${TIP_OPTION_o}"
+  fi
+
+  # Validation of date/time and format options
+
+  date -d "$DATE_START" > /dev/null 2>&1
+  if [[ $(echo "$?") != 0 ]]; then
+    sys_error 'Start date format is not recognized'
+    sys_tip "${TIP_OPTION_date}"
+  fi
+  
+  date -d "$DATE_END" > /dev/null 2>&1
+  if [[ $(echo "$?") != 0 ]]; then
+    sys_error 'End date format is not recognized'
+    sys_tip "${TIP_OPTION_date}"
+  fi
+
+  date -d "now" "+${SRC_DATE_FORMAT}" > /dev/null 2>&1
+  if [[ $(echo "$?") != 0 ]]; then
+    sys_error 'Output date format is not recognized'
+    sys_tip "${TIP_OPTION_w}"
+  fi
+
+  # Validation of months format in date format
+
+  if [[ ! "${SRC_DATE_FORMAT}" =~ (%m|%b|%s|%B) ]]; then
+    sys_error 'Option -w - can not found months definition'
+    sys_tip "${TIP_OPTION_w}"
+  fi
+
+  # Validation of custom months format
+
+  if [[ -n ${MONTHS_CUSTOM} ]]; then
+
+    if [[ $(echo "${MONTHS_CUSTOM}" | grep -o "," | wc -l) != 11 ]]; then
+      sys_error 'Option -M - count of custom months must be 12 over ","'
+      sys_tip "${TIP_OPTION_M}"
+    fi
+
+  fi
+
+  # Abort program, if critical errors was
+
+  sys_is_abort
+
+}
+
+# MAIN-PROGRAM FUNCTIONS
+
+function fx_set_custom_months() {
+  
+  # This option says which months format is used in date source
+
+  if [[ -z "${MONTHS_CUSTOM}" ]]; then
+
+    if   [[ "${SRC_DATE_FORMAT}" =~ "%m" ]]; then
+      MONTHS_CUSTOM="01,02,03,04,05,06,07,08,09,10,11,12"
+    elif [[ "${SRC_DATE_FORMAT}" =~ "%b" ]]; then
+      MONTHS_CUSTOM="Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec"
+    elif [[ "${SRC_DATE_FORMAT}" =~ "%s" ]]; then
+      MONTHS_CUSTOM="01,02,03,04,05,06,07,08,09,10,11,12"
+    elif [[ "${SRC_DATE_FORMAT}" =~ "%B" ]]; then
+      MONTHS_CUSTOM="January,Febrary,Marth,April,May,June,Jule,August,September,
+                                                      October,November,December"
+    fi
+    readonly MONTHS_CUSTOM
+
+  fi
+
+}
+
+function fx_find_files() {
+
+  local find_start \
+        find_end \
+        res_find \
+        res_test \
+        err_code
+
+  # Prepare dates for find command
+  
+  find_start="$(date -d "$(date -d "${DATE_START}" +%F) -${DATE_OFFSET}days" +%Y-%m-%d)"
+  find_end="$(date -d "$(date -d "${DATE_END}" +%F) +${DATE_OFFSET}days" +%Y-%m-%d)"
+
+  # Find files between two dates or all in dir, and sort results by mtime
+
+  if [[ "${SRC_BY_MTIME}" == 'true' ]]; then
+
+    res_find="$(find ${SRC_DATA_PATH} \
+      -type f \
+      -name "${SRC_DATA_FNAME}" \
+      -newermt "${find_start} 00:00:00" ! -newermt "${find_end} 23:59:59" \
+      -exec ls -1rt "{}" +;)"
+  
+  else
+    
+    res_find="$(find ${SRC_DATA_PATH} \
+      -type f \
+      -name "${SRC_DATA_FNAME}" \
+      -exec ls -1rt "{}" +;)"
+  fi
+
+  # Save result files count
+  
+  if [[ -n "${res_find}" ]]; then
+    res_test="$(cat ${res_find} | wc -l)"
+  else
+    res_test="0"
+  fi
+  
+  # Send data to debug channel
+  
+  err_code="$?"
+  if [[ "${err_code}" -ne 0 ]]; then
+    sys_error "Find command exits with code ${err_code}"
+  else
+    sys_debug "records in find: ${res_test}";
+    echo "${res_find}"
+  fi
+
+  # Check if it necessary to abort execute
+
+  sys_is_abort
+
+}
+
+function fx_get_data() { 
+
+  local i \
+        content \
+        current_file \
+        current_type \
+        files_list \
+        awk_format \
+        awk_start \
+        awk_end \
+
+    awk_cmd() {
+      awk \
+      -v DATE_START="${awk_start}" \
+      -v DATE_END="${awk_end}" \
+      -v DATE_FORMAT="${awk_format}" \
+      -v DATE_FIELD="${SRC_DATE_FIELD}" \
+      -v MONTHS_CUSTOM="${MONTHS_CUSTOM}" \
+      -v DEBUG="${DEBUG}" \
+      -F "${SRC_DATA_SEPAR}" \
+      -f "$(sys_workdir)/dasp.awk"
+    }
+
+  # Prepare dates for awk command 
+
+  files_list="$1"
+  awk_format="$(echo "${SRC_DATE_FORMAT}" | sed "s/%b/%m/" | sed "s/%B/%m/")"
+  awk_start="$(date -d "${DATE_START}" "+${awk_format}")"
+  awk_end="$(date -d "${DATE_END}" "+${awk_format}")"
+
+  # Iterate throught files_list 
+
+  i=0
+
+  while IFS= read -r current_file
+  do
+    # Sys counter and message
+
+    let i++
+    sys_debug "reading ${i} ${current_file}"
+
+    # Determine file type and cat type
+    
+    current_type=$(file -b "${current_file}")
+    if [[ ${current_type:0:4} == "gzip" ]]; then
+      show_cmd="gunzip -c"
+    else
+      show_cmd="cat"
+    fi
+
+    # Read file and send stream to awk command
+
+    if [[ -n "${TMP_FILE}" ]]; then                       # send res to tmp file
+      $show_cmd ${current_file} | awk_cmd >> ${TMP_FILE}
+    
+    else                                                  # send res to stdout
+      content="$($show_cmd ${current_file} | awk_cmd )"
+      if [[ -n "${content}" ]]; then
+        echo "${content}"
+        content=''
+      fi
+    fi
+
+  done <<< "${files_list}"
+
+  # Show output if awk work with tmp file
+
+  [[ -n "${TMP_FILE}" ]] && cat "${TMP_FILE}"
+
+}
+
+function main() {
+
+  local files_list
+
+  init_program_vars
+  init_help_vars
+
+  fx_getopts "$@"
+  fx_check_required_options
+  fx_data_validation
+
+  fx_set_custom_months
+  files_list="$("fx_find_files")"
+  fx_get_data "${files_list}"
+
+}
+
+main "$@"

@@ -1,0 +1,419 @@
+#!/bin/bash
+#
+# Osvalt (old-school viewer: apache log tool) - script based on
+# "dasp" script to simply getting log data from logs for date range
+#
+# Style guide: https://google.github.io/styleguide/shell.xml
+#
+#__________________________________________________________________
+
+
+# SYSTEM FUNCTIONS
+
+function sys_usage() {
+
+  echo "Usage: osvalt [date_start] [date_end] [parametrs]...
+
+  Dates section:
+    \$1 & \$2 set in any format recognized by \$(date) command
+
+  Views section (predefined fields)
+    vshort    show refferer field
+    vall      show user-agent field
+
+  Views section (fields with separator \040):
+    fip       show ip field
+    fdate     show date field
+    ftype     show request type field
+    furl      show requested url field
+    fhttp     show http ver field
+    fcode     show server code field
+    fsize     show request size field
+
+  Views section (fields with separator \042):
+    freq      show request field
+    fref      show refferer field
+    fagent    show user-agent field
+
+  Views section (change view of results fields):
+    uniq      results stat
+
+  Statistic section (total):
+    treq_a    show total requests count per date range
+    treq_d    show total requests count per day
+    treq_h    show total requests count per hour
+    tsize_a   show total traffic per date range
+    tsize_d   show total traffic per day
+    tsize_h   show total traffic per hour
+    tsize_c   show total traffic per codes
+    
+  Statistic section (uniq):
+    sip       show IPs statistic
+    scode     show server codes statistic
+    sagent    show user-agents statistic
+    sreq      show requests statistic
+    sfiles    show requests statistic (files only) 
+    sref      show refferers statistic
+  " | sed 's/^\s\s//' 1>&2
+  
+  sys_copyright
+  
+  exit 1
+}
+
+function sys_description() {
+
+  echo "Apache logs viewer - bash script, that provides getting log
+  data for date range from logs
+
+  For usage call: osvalt -h
+  " | sed 's/^\s\s//' 1>&2
+  
+  sys_copyright
+
+  exit 1
+}
+
+function sys_examples() {
+  echo "Examples:
+  For additional filtering results you may use throught pipe command like sort,
+  uniq, grep
+  1) who generate 404 code: \"freq fref fagent | grep \"^GET \wp-login.php\"
+  2) pages with 303 and 503 code:   \"fcode fip freq | grep \"^303\\|503\"
+  3) show refferers without our domain \"sref | grep -v \"ans.sh\"
+  4) for total: add at the end of custom fields \"uniq\" for total
+  "
+}
+
+function sys_copyright() {
+
+  echo "Version: 1.05
+  Contact: http://ans.sh or ans.novoselov@gmail.com"\
+  | sed 's/^\s\s//' 1>&2
+
+}
+
+function sys_error() {
+  [[ "$@" ]] && echo "err: $@" >&2
+  critical_error_flag="1"
+}
+
+function sys_debug() {
+  echo -e "dbg: $@" >&2
+}
+
+function sys_tip() {
+  [[ "$@" ]] && echo "tip: $@" >&2
+}
+
+# MAIN-PROGRAM FUNCTIONS
+
+function main (){
+
+  local OPTIND \
+        flag \
+        DATE_START \
+        DATE_END \
+        show \
+        out \
+        stat \
+        field_1 \
+        field_2
+
+  # Throw to description if no options are passed
+
+  if [[ -z "$@" ]]; then
+    sys_description
+  fi
+
+  # Get options
+
+  while getopts 'hs:' flag; do
+    case "${flag}" in
+      s) echo "path/to" ;;
+      h) sys_usage ;;
+      ?) sys_error ;;
+    esac
+  done
+  
+  # Get dates and reduce positional parametrs
+
+  shift "$((OPTIND-1))"
+  
+  DATE_START="$1"
+  DATE_END="$2"
+
+  shift "2"
+
+  # Execute dasp and store results into variable
+  
+  out="$(dasp/dasp \
+    -s test/mock_real/ \
+    -f "access*" \
+    -d " " \
+    -w "[%d/%b/%Y:%H:%M:%S" \
+    -k 4 \
+    -o 2 \
+    -r \
+    "${DATE_START}" "${DATE_END}")"
+    
+  # Get statistic info from output (store in stat var)
+  
+  for flag in "$@"
+  do
+    case "${flag}" in
+
+      treq_a)
+        stat="${stat}$( echo "Total requests:") \n" 
+        stat="${stat}\t $( echo "${out}" | wc -l ) \n"
+        ;;
+      treq_d)
+        stat="${stat}$( echo "Total requests (per day):") \n" 
+        stat="${stat}$( echo "${out}" | awk '{print $4}' \
+                                      | cut -d: -f1 \
+                                      | uniq -c ) \n"
+        ;;
+      treq_h)
+        stat="${stat}$( echo "Total requests (per hour):") \n" 
+        stat="${stat}$( echo "${out}" | cut -d[ -f2 \
+                                      | cut -d] -f1 \
+                                      | awk -F: '{print $2":00"}' \
+                                      | sort -n \
+                                      | uniq -c ) \n"
+        ;;
+      tsize_a)
+        stat="${stat}$( echo "Total traffic:") \n"
+        stat="${stat}$( echo "${out}" \
+          | awk '{ s += $10 } END { print "\t"s/1024/1024 " Mb" }' ) \n"
+        ;;
+      tsize_d)
+        stat="${stat}$( echo "Total traffic (per day):") \n" 
+        stat="${stat}$( echo "${out}" \
+          | awk '{print $4 FS $5 FS $10}' \
+          | cut -d[ -f2 \
+          | cut -d] -f1,2 \
+          | awk \
+          '
+          { split ($0,arr,"[\040\072]")}
+          { print arr[1], arr[6] }
+          ' \
+          | awk \
+          '
+          { arr[$1] += $2 } 
+            END {
+              for (k in arr){
+                printf "\t%.2f Mb - %s\n", arr[k]/1024/1024, k
+              }
+            }
+          ' ) \n"
+        ;;
+      tsize_h)
+        stat="${stat}$( echo "Total traffic (per hour):") \n" 
+        stat="${stat}$( echo "${out}" \
+          | awk '{print $4 FS $5 FS $10}' \
+          | cut -d[ -f2 \
+          | cut -d] -f1,2 \
+          | awk \
+          '
+          { split ($0,arr,"[\040\072]")}
+          { print arr[1], arr[2]":00:00", arr[6] }
+          ' \
+          | awk \
+          '
+          { arr[$1"_"$2] += $3 } 
+            END {
+              for (k in arr){
+                printf "\t%.2f Mb - %s\n", arr[k]/1024/1024, k
+              }
+            }
+          ' ) \n"
+        ;;
+      tsize_c)
+        stat="${stat}$( echo "Total traffic (per code):") \n" 
+        stat="${stat}$( echo "${out}" \
+          | awk \
+          '
+          { total[$9] += $10}
+            END {
+              for (x in total){
+                printf "\t%3d : %9.2f Mb\n", x, total[x]/1024/1024
+              }
+            }
+          ' ) \n "
+        ;;
+
+    esac
+  done
+  
+  # Get user defined fields for reduce output
+  
+  for flag in "$@"
+  do
+    case "${flag}" in
+      
+      # Prefefined views section
+
+      vshort)
+        field_1="${field_1}1;4;7;"
+        ;;
+      vall)
+        show='true'
+        ;;
+
+      # Field views section (separator - \040)
+
+      fip)
+        field_1="${field_1}1;"
+        ;;
+      fdate)
+        field_1="${field_1}4;5;"
+        ;;
+      ftype)
+        field_1="${field_1}6;"
+        ;;
+      furl)
+        field_1="${field_1}7;"
+        ;;
+      fhttp)
+        field_1="${field_1}8;"
+        ;;
+      fcode)
+        field_1="${field_1}9;"
+        ;;
+      fsize)
+        field_1="${field_1}10;"
+        ;;
+
+      # Field views section (separator - \042)
+
+      freq)
+        field_2="${field_2}2;"
+        ;;
+      fref)
+        field_2="${field_2}4;"
+        ;;
+      fagent)
+        field_2="${field_2}6;"
+        ;;
+
+    esac
+  done
+
+  # Reduce output with user defined fields
+
+  if [[ -n "${field_1}" || -n "${field_2}" ]]; then
+
+    out="$( echo -n "${out}" | awk \
+    -v FIELD_1="${field_1}" \
+    -v FIELD_2="${field_2}" \
+    '
+    BEGIN {
+      split (FIELD_1, field_view_1, ";");
+      split (FIELD_2, field_view_2, ";");
+    }
+    {
+      split ($0, view_1, "[\040]");
+      split ($0, view_2, "[\042]");
+
+      result = ""
+
+      for (k in field_view_1) {
+        result = result FS view_1[field_view_1[k]];
+      }
+
+      for (k in field_view_2) {
+        result = result FS view_2[field_view_2[k]];
+      }
+ 
+      sub  (/ /, "", result);
+      print result;
+    }
+    ' )"
+
+    show='true'
+
+  fi
+
+  # Reduce output with statistic section
+    
+  for flag in "$@"
+  do
+    case "${flag}" in
+      sip)
+        stat="${stat}$( echo "Ip statistic:") \n"
+        stat="${stat}$( echo "${out}" \
+              | awk '{print $1}' \
+              | sort -n \
+              | uniq -c \
+              | sort -nr ) \n"
+        ;;
+      scode)
+        stat="${stat}$( echo "Http codes statistic:") \n"
+        stat="${stat}$( echo "${out}" \
+              | awk '{print $9}' \
+              | sort \
+              | uniq -c \
+              | sort ) \n"
+        ;;
+      sagent)
+        stat="${stat}$( echo "User-agents statistic:") \n"
+        stat="${stat}$( echo "${out}" \
+              | awk -F\" '{print $6}' \
+              | sort -n \
+              | uniq -c \
+              | sort -nr ) \n"
+        ;;
+      sreq)
+        stat="${stat}$( echo "Requests statistic:") \n"
+        stat="${stat}$( echo "${out}" \
+              | awk -F\" '{print $2}' \
+              | sort -n \
+              | uniq -c \
+              | sort -nr ) \n"
+        ;;
+      sfiles)
+        stat="${stat}$( echo "Requests statistic (before ?):") \n"
+        stat="${stat}$( echo "${out}" \
+              | awk '{print $7}' \
+              | cut -d? -f1 \
+              | sort \
+              | uniq -c \
+              | sort -nk1 \
+              | tail -n10 ) \n"
+        ;;
+      sref)
+        stat="${stat}$( echo "Refferers statistic:") \n"
+        stat="${stat}$( echo "${out}" \
+              | awk -F\" '{print $4}' \
+              | sort -n \
+              | uniq -c \
+              | sort -nr ) \n"
+        ;;
+    esac
+  done
+
+  # Reduce output with filter section 
+  
+  for flag in "$@"
+  do
+    case "${flag}" in
+      uniq)
+      out="$( echo "${out}" | sort -n | uniq -c | sort -nr )"
+    esac
+  done
+  
+  # Show output
+
+  if [[ -n "${show}" ]]; then
+    echo -e "${out}"
+  fi
+  
+  # Show stat var
+  
+  if [[ -n "${stat}" ]]; then
+    echo -e "${stat}"
+  fi
+
+}
+
+main "$@"
