@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Osvalt (old-school viewer: apache log tool) - script based on
-# "dasp" script to simply getting log data from logs for date range
+# Osvalt (old-school viewer: apache log tool) - wrapper script for 
+# "dasp" script to simply getting apache log data for date range
 #
 # Style guide: https://google.github.io/styleguide/shell.xml
 #
@@ -14,14 +14,18 @@ function sys_usage() {
 
   echo "Usage: osvalt [options] [date_start] [date_end] [parametrs]...
 
-  Options:
+  Required options:
     -s | data source: directory contains apache logs
-    -f | data source: access files pattern
+  Optional options
+    -f | data source: access files pattern (def: access*)
+    -o | data source: search in files by mtime +- days count offset (def: 2)
+    -b | debug on
   Dates:
     - \$1 & \$2 set in any format recognized by \$(date) command
-  First form output:
-    - fall  fshort
+  First, form output:
+    - vall  vshort
     - fip  fdate  ftype  furl  fhttp  fcode  fsize  freq  fref  fsize
+    # - 1 2 3 4 5 6 7 8 9 10 11 12 13 14
   Then reduce output:
     - built-in shortcuts: uniq
     - linux commands over pipe: grep, tac, head, tail, etc.
@@ -51,40 +55,39 @@ function sys_description() {
 
 function sys_examples() {
   echo "Examples:
-  - who generate 404 code: \"freq fref fagent | grep \"^GET \wp-login.php\"
+  - dates define \"today\", \"3 days ago\", \"now\", etc..
+  - who generate 404 code: \"freq fref fagent | grep \"^GET \wp-hd87.php\"
   - pages with 303 and 503 code: \"fcode fip freq | grep \"^303\\|503\"
   - show refferers without self domain \"fref uniq | grep -v \"ans.sh\"
-  - for total: add at the end of custom fields \"uniq\" for total
-"
+  - for total: add at the end of custom fields \"uniq\" for total"
 }
 
 function sys_copyright() {
 
-  echo "Version: 1.06
+  echo "Version: 1.07
   Contact: http://ans.sh or ans.novoselov@gmail.com"\
   | sed 's/^\s\s//' 1>&2
 
 }
 
-function sys_error() {
-  [[ "$@" ]] && echo "err: $@" >&2
-  critical_error_flag="1"
-}
+function sys_workdir() {
+  
+  # Solution from http://stackoverflow.com/a/697552/7489927
 
-function sys_is_abort() {
-  if [[ "${critical_error_flag}" == 1 ]]; then
-    echo "tip: type ./osvalt -h for usage"
-    echo "exit"
-    exit 1
-  fi
-}
+  local source \
+        dir
 
-function sys_debug() {
-  echo -e "dbg: $@" >&2
-}
+  source="${BASH_SOURCE[0]}"
 
-function sys_tip() {
-  [[ "$@" ]] && echo "tip: $@" >&2
+  while [ -h "$source" ]; do
+      dir="$( cd -P "$( dirname "$source" )" && pwd )"
+      source="$( readlink "$source" )"
+      [[ $source != /* ]] && source="$dir/$source"
+  done
+
+  dir="$( cd -P "$( dirname "$source" )" && pwd )"
+  
+  echo "$dir"
 }
 
 # MAIN-PROGRAM FUNCTIONS
@@ -105,47 +108,37 @@ function main (){
         field_1 \
         field_2
 
-  # Globals
-
-  critical_error_flag=''
-
   # Throw to description if no options are passed
 
   if [[ -z "$@" ]]; then
     sys_description
   fi
 
-  # Get options
+  # Get options - send directly to dasp and checked there
 
-  while getopts 'hs:f:' flag; do
+  while getopts 's:f:o:rbh' flag; do
     case "${flag}" in
-      s)
-      SRC_DIR="${OPTARG}"
-      ;;
-      f)
-      SRC_PFX="${OPTARG}"
-      ;;
+      s) OPTION_S="${OPTARG}"
+         readonly OPTION_S
+         ;;
+      f) OPTION_F="${OPTARG}"
+         readonly OPTION_F
+         ;;
+      o) OPTION_O="-o ${OPTARG}"
+         readonly OPTION_O
+         ;;
+      b) OPTION_B="-b"
+         readonly OPTION_B
+         ;;
       h) sys_usage ;;
-      ?) sys_error ;;
     esac
   done
 
-  # Check required options, set default values
+  # Default options for apache logs (description is into dasp)
 
-  if [[ -z "${SRC_DIR}" ]]; then
-    sys_error 'option -s is required'
-    sys_tip "-s | data source: directory contains data source"
-  
-  elif [[ ! -d "${SRC_DIR}" ]]; then
-    sys_error 'Option -s - path is not exists'
-    sys_tip "-s | data source: directory contains data source"
+  if [[ -z "${OPTION_F}" ]]; then
+    OPTION_F="access*"
   fi
-
-  if [[ -z "${SRC_PFX}" ]]; then
-    SRC_PFX="access*"
-  fi
-
-  sys_is_abort
 
   # Get dates and reduce positional parametrs
 
@@ -157,19 +150,19 @@ function main (){
   readonly DATE_END
 
   shift "2"
-
+  
   # Execute dasp (store in $out)
-
+  
   if [[ "$#" != 0 ]]; then
-    out="$(dasp/dasp \
-      -s "${SRC_DIR}" \
-      -f "${SRC_PFX}" \
+    out="$("$(sys_workdir)"/dasp/dasp \
+      -s "${OPTION_S}" \
+      -f "${OPTION_F}" \
       -d " " \
       -w "[%d/%b/%Y:%H:%M:%S" \
       -k 4 \
-      -o 2 \
-      -r \
-      "${DATE_START}" "${DATE_END}")"
+       ${OPTION_O} \
+       ${OPTION_B} \
+      "${DATE_START}" "${DATE_END}" )"
   else
     sys_usage
   fi
@@ -181,30 +174,30 @@ function main (){
     case "${flag}" in
 
       treq_a)
-        stat="${stat}$( echo "Total requests:") \n" 
-        stat="${stat}\t $( echo "${out}" | wc -l ) \n"
+        stat="${stat}$( echo "Total requests:")\n" 
+        stat="${stat}$( echo "${out}" | wc -l )\n"
         ;;
       treq_d)
-        stat="${stat}$( echo "Total requests (per day):") \n" 
-        stat="${stat}$( echo "${out}" | awk '{print $4}' \
+        stat="${stat}$( echo "Total requests (per day):")\n" 
+        stat="${stat}$( echo "${out}" | awk '{print $4}'\
                                       | cut -d: -f1 \
-                                      | uniq -c ) \n"
+                                      | uniq -c )\n"
         ;;
       treq_h)
-        stat="${stat}$( echo "Total requests (per hour):") \n" 
+        stat="${stat}$( echo "Total requests (per hour):")\n" 
         stat="${stat}$( echo "${out}" | cut -d[ -f2 \
                                       | cut -d] -f1 \
                                       | awk -F: '{print $2":00"}' \
                                       | sort -n \
-                                      | uniq -c ) \n"
+                                      | uniq -c )\n"
         ;;
       tsize_a)
-        stat="${stat}$( echo "Total traffic:") \n"
+        stat="${stat}$( echo "Total traffic:")\n"
         stat="${stat}$( echo "${out}" \
-          | awk '{ s += $10 } END { print "\t"s/1024/1024 " Mb" }' ) \n"
+          | awk '{ s += $10 } END { print "\t"s/1024/1024 " Mb" }' )\n"
         ;;
       tsize_d)
-        stat="${stat}$( echo "Total traffic (per day):") \n" 
+        stat="${stat}$( echo "Total traffic (per day):")\n" 
         stat="${stat}$( echo "${out}" \
           | awk '{print $4 FS $5 FS $10}' \
           | cut -d[ -f2 \
@@ -222,10 +215,10 @@ function main (){
                 printf "\t%.2f Mb - %s\n", arr[k]/1024/1024, k
               }
             }
-          ' ) \n"
+          ' )\n"
         ;;
       tsize_h)
-        stat="${stat}$( echo "Total traffic (per hour):") \n" 
+        stat="${stat}$( echo "Total traffic (per hour):")\n" 
         stat="${stat}$( echo "${out}" \
           | awk '{print $4 FS $5 FS $10}' \
           | cut -d[ -f2 \
@@ -243,10 +236,10 @@ function main (){
                 printf "\t%.2f Mb - %s\n", arr[k]/1024/1024, k
               }
             }
-          ' ) \n"
+          ' )\n"
         ;;
       tsize_c)
-        stat="${stat}$( echo "Total traffic (per code):") \n" 
+        stat="${stat}$( echo "Total traffic (per code):")\n" 
         stat="${stat}$( echo "${out}" \
           | awk \
           '
@@ -256,7 +249,7 @@ function main (){
                 printf "\t%3d : %9.2f Mb\n", x, total[x]/1024/1024
               }
             }
-          ' ) \n"
+          ' )\n"
         ;;
 
     esac
