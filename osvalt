@@ -12,50 +12,25 @@
 
 function sys_usage() {
 
-  echo "Usage: osvalt [date_start] [date_end] [parametrs]...
+  echo "Usage: osvalt [options] [date_start] [date_end] [parametrs]...
 
-  Dates section:
-    \$1 & \$2 set in any format recognized by \$(date) command
-
-  Views section (predefined fields)
-    vshort    show refferer field
-    vall      show user-agent field
-
-  Views section (fields with separator \040):
-    fip       show ip field
-    fdate     show date field
-    ftype     show request type field
-    furl      show requested url field
-    fhttp     show http ver field
-    fcode     show server code field
-    fsize     show request size field
-
-  Views section (fields with separator \042):
-    freq      show request field
-    fref      show refferer field
-    fagent    show user-agent field
-
-  Views section (change view of results fields):
-    uniq      results stat
-
-  Statistic section (total):
-    treq_a    show total requests count per date range
-    treq_d    show total requests count per day
-    treq_h    show total requests count per hour
-    tsize_a   show total traffic per date range
-    tsize_d   show total traffic per day
-    tsize_h   show total traffic per hour
-    tsize_c   show total traffic per codes
-    
-  Statistic section (uniq):
-    sip       show IPs statistic
-    scode     show server codes statistic
-    sagent    show user-agents statistic
-    sreq      show requests statistic
-    sfiles    show requests statistic (files only) 
-    sref      show refferers statistic
-  " | sed 's/^\s\s//' 1>&2
+  Options:
+    -s | data source: directory contains apache logs
+    -f | data source: access files pattern
+  Dates:
+    - \$1 & \$2 set in any format recognized by \$(date) command
+  First form output:
+    - fall  fshort
+    - fip  fdate  ftype  furl  fhttp  fcode  fsize  freq  fref  fsize
+  Then reduce output:
+    - built-in shortcuts: uniq
+    - linux commands over pipe: grep, tac, head, tail, etc.
+  Or/and form statistic output:
+    - requests - treq_a  treq_d  treq_h
+    - traffic  - tsize_a  tsize_d  tsize_h  tsize_c" \
+    | sed 's/^\s\s//' 1>&2
   
+  sys_examples
   sys_copyright
   
   exit 1
@@ -63,8 +38,8 @@ function sys_usage() {
 
 function sys_description() {
 
-  echo "Apache logs viewer - bash script, that provides getting log
-  data for date range from logs
+  echo "Old-school viewer: apache logs tool - bash script, that provides getting
+  log data for date range from access logs
 
   For usage call: osvalt -h
   " | sed 's/^\s\s//' 1>&2
@@ -76,18 +51,16 @@ function sys_description() {
 
 function sys_examples() {
   echo "Examples:
-  For additional filtering results you may use throught pipe command like sort,
-  uniq, grep
-  1) who generate 404 code: \"freq fref fagent | grep \"^GET \wp-login.php\"
-  2) pages with 303 and 503 code:   \"fcode fip freq | grep \"^303\\|503\"
-  3) show refferers without our domain \"sref | grep -v \"ans.sh\"
-  4) for total: add at the end of custom fields \"uniq\" for total
-  "
+  - who generate 404 code: \"freq fref fagent | grep \"^GET \wp-login.php\"
+  - pages with 303 and 503 code: \"fcode fip freq | grep \"^303\\|503\"
+  - show refferers without self domain \"fref uniq | grep -v \"ans.sh\"
+  - for total: add at the end of custom fields \"uniq\" for total
+"
 }
 
 function sys_copyright() {
 
-  echo "Version: 1.05
+  echo "Version: 1.06
   Contact: http://ans.sh or ans.novoselov@gmail.com"\
   | sed 's/^\s\s//' 1>&2
 
@@ -96,6 +69,14 @@ function sys_copyright() {
 function sys_error() {
   [[ "$@" ]] && echo "err: $@" >&2
   critical_error_flag="1"
+}
+
+function sys_is_abort() {
+  if [[ "${critical_error_flag}" == 1 ]]; then
+    echo "tip: type ./osvalt -h for usage"
+    echo "exit"
+    exit 1
+  fi
 }
 
 function sys_debug() {
@@ -110,15 +91,23 @@ function sys_tip() {
 
 function main (){
 
+  # Locals
+
   local OPTIND \
         flag \
         DATE_START \
         DATE_END \
+        SRC_DIR \
+        SRC_PFX \
         show \
         out \
         stat \
         field_1 \
         field_2
+
+  # Globals
+
+  critical_error_flag=''
 
   # Throw to description if no options are passed
 
@@ -128,36 +117,64 @@ function main (){
 
   # Get options
 
-  while getopts 'hs:' flag; do
+  while getopts 'hs:f:' flag; do
     case "${flag}" in
-      s) echo "path/to" ;;
+      s)
+      SRC_DIR="${OPTARG}"
+      ;;
+      f)
+      SRC_PFX="${OPTARG}"
+      ;;
       h) sys_usage ;;
       ?) sys_error ;;
     esac
   done
+
+  # Check required options, set default values
+
+  if [[ -z "${SRC_DIR}" ]]; then
+    sys_error 'option -s is required'
+    sys_tip "-s | data source: directory contains data source"
   
+  elif [[ ! -d "${SRC_DIR}" ]]; then
+    sys_error 'Option -s - path is not exists'
+    sys_tip "-s | data source: directory contains data source"
+  fi
+
+  if [[ -z "${SRC_PFX}" ]]; then
+    SRC_PFX="access*"
+  fi
+
+  sys_is_abort
+
   # Get dates and reduce positional parametrs
 
   shift "$((OPTIND-1))"
   
   DATE_START="$1"
+  readonly DATE_START
   DATE_END="$2"
+  readonly DATE_END
 
   shift "2"
 
-  # Execute dasp and store results into variable
-  
-  out="$(dasp/dasp \
-    -s test/mock_real/ \
-    -f "access*" \
-    -d " " \
-    -w "[%d/%b/%Y:%H:%M:%S" \
-    -k 4 \
-    -o 2 \
-    -r \
-    "${DATE_START}" "${DATE_END}")"
-    
-  # Get statistic info from output (store in stat var)
+  # Execute dasp (store in $out)
+
+  if [[ "$#" != 0 ]]; then
+    out="$(dasp/dasp \
+      -s "${SRC_DIR}" \
+      -f "${SRC_PFX}" \
+      -d " " \
+      -w "[%d/%b/%Y:%H:%M:%S" \
+      -k 4 \
+      -o 2 \
+      -r \
+      "${DATE_START}" "${DATE_END}")"
+  else
+    sys_usage
+  fi
+
+  # Form total info from output (store in $stat )
   
   for flag in "$@"
   do
@@ -239,13 +256,13 @@ function main (){
                 printf "\t%3d : %9.2f Mb\n", x, total[x]/1024/1024
               }
             }
-          ' ) \n "
+          ' ) \n"
         ;;
 
     esac
   done
   
-  # Get user defined fields for reduce output
+  # Get user defined fields for reducing output in $out
   
   for flag in "$@"
   do
@@ -299,7 +316,7 @@ function main (){
     esac
   done
 
-  # Reduce output with user defined fields
+  # Reduce output in $out with user defined fields
 
   if [[ -n "${field_1}" || -n "${field_2}" ]]; then
 
@@ -334,83 +351,29 @@ function main (){
 
   fi
 
-  # Reduce output with statistic section
-    
-  for flag in "$@"
-  do
-    case "${flag}" in
-      sip)
-        stat="${stat}$( echo "Ip statistic:") \n"
-        stat="${stat}$( echo "${out}" \
-              | awk '{print $1}' \
-              | sort -n \
-              | uniq -c \
-              | sort -nr ) \n"
-        ;;
-      scode)
-        stat="${stat}$( echo "Http codes statistic:") \n"
-        stat="${stat}$( echo "${out}" \
-              | awk '{print $9}' \
-              | sort \
-              | uniq -c \
-              | sort ) \n"
-        ;;
-      sagent)
-        stat="${stat}$( echo "User-agents statistic:") \n"
-        stat="${stat}$( echo "${out}" \
-              | awk -F\" '{print $6}' \
-              | sort -n \
-              | uniq -c \
-              | sort -nr ) \n"
-        ;;
-      sreq)
-        stat="${stat}$( echo "Requests statistic:") \n"
-        stat="${stat}$( echo "${out}" \
-              | awk -F\" '{print $2}' \
-              | sort -n \
-              | uniq -c \
-              | sort -nr ) \n"
-        ;;
-      sfiles)
-        stat="${stat}$( echo "Requests statistic (before ?):") \n"
-        stat="${stat}$( echo "${out}" \
-              | awk '{print $7}' \
-              | cut -d? -f1 \
-              | sort \
-              | uniq -c \
-              | sort -nk1 \
-              | tail -n10 ) \n"
-        ;;
-      sref)
-        stat="${stat}$( echo "Refferers statistic:") \n"
-        stat="${stat}$( echo "${out}" \
-              | awk -F\" '{print $4}' \
-              | sort -n \
-              | uniq -c \
-              | sort -nr ) \n"
-        ;;
-    esac
-  done
-
-  # Reduce output with filter section 
+  # Reduce output in $out with filters 
   
   for flag in "$@"
   do
     case "${flag}" in
       uniq)
-      out="$( echo "${out}" | sort -n | uniq -c | sort -nr )"
+        out="$( echo "${out}" | sort -n | uniq -c | sort -nr )"
+        ;;
     esac
   done
   
-  # Show output
+  # Show output from $out
 
   if [[ -n "${show}" ]]; then
     echo -e "${out}"
   fi
   
-  # Show stat var
+  # Show total from $stat
   
   if [[ -n "${stat}" ]]; then
+    echo -e "Statistic"
+    echo -e "\tfrom $(date -d "${DATE_START}" "+%D %T")"
+    echo -e "\tto   $(date -d "${DATE_END}" "+%D %T")"
     echo -e "${stat}"
   fi
 
