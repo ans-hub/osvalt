@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# Completions function for osvalt shell script 
+#
+# Style guide: https://google.github.io/styleguide/shell.xml
+
+
+_osvalt_cpl(){
+
+  local curr \
+        prev \
+        opts
+
+  COMPREPLY=()
+
+  curr="${COMP_WORDS[COMP_CWORD]}"
+  prev1="${COMP_WORDS[COMP_WORD-1]}"
+  prev2="${COMP_WORDS[COMP_WORD-2]}"
+  opts="vall vshort fip fdate ftype furl
+        fhttp fcode fsize
+        freq fref fagent uniq treq_a treq_d treq_h treq
+        tsize_a tsize_d tsize_c tsize"
+
+  COMPREPLY=( $(compgen -W "${opts}" -- ${curr}) )
+  return 0
+ 
+}
+
+complete -F _osvalt_cpl osvalt

@@ -12,29 +12,35 @@
 
 function sys_usage() {
 
-  echo "Usage: osvalt [options] [date_start] [date_end] [parametrs]...
+  echo "Usage: osvalt [-options] [date_start] [date_end] [parametrs]...
 
   Required options:
-    -s | data source: directory contains apache logs
-  Optional options
-    -f | data source: access files pattern (def: access*)
-    -o | data source: search in files by mtime +- days count offset (def: 2)
-    -b | debug on
-  Dates:
-    - \$1 & \$2 set in any format recognized by \$(date) command
+    -s | apache logs directory
+  Optional options:
+    -f | access files pattern (def: access*)
+    -o | search in files by mtime +- days count offset
+    -M | user defined 12 months, separated by commas
+    -t | use temp file for dasp instead of var (if perfomance issue)
+    -b | debug
+    -h | help
+  Positional parametrs:
+    -\$1 & \$2 set in any format recognized by \$(date) command
+
   First, form output:
     - vall  vshort
-    - fip  fdate  ftype  furl  fhttp  fcode  fsize  freq  fref  fsize
-    # - 1 2 3 4 5 6 7 8 9 10 11 12 13 14
+    - fip  fdate  ftype  furl  fhttp  fcode  fsize 
+    - freq  fref  fagent
   Then reduce output:
     - built-in shortcuts: uniq
     - linux commands over pipe: grep, tac, head, tail, etc.
   Or/and form statistic output:
     - requests - treq_a  treq_d  treq_h
-    - traffic  - tsize_a  tsize_d  tsize_h  tsize_c" \
+    - traffic  - tsize_a  tsize_d  tsize_h  tsize_c
+    " \
     | sed 's/^\s\s//' 1>&2
   
   sys_examples
+  echo ""
   sys_copyright
   
   exit 1
@@ -64,7 +70,7 @@ function sys_examples() {
 
 function sys_copyright() {
 
-  echo "Version: 1.07
+  echo "Version: 1.08
   Contact: http://ans.sh or ans.novoselov@gmail.com"\
   | sed 's/^\s\s//' 1>&2
 
@@ -90,6 +96,22 @@ function sys_workdir() {
   echo "$dir"
 }
 
+function sys_tip() {
+
+  echo "First, form output:
+  - vall  vshort
+  - fip  fdate  ftype  furl  fhttp  fcode  fsize 
+  - freq  fref  fagent
+  Then, reduce output:
+  - built-in shortcuts: uniq
+  - linux commands over pipe: grep, tac, head, tail, etc.
+  Or/and form statistic output:
+  - requests - treq_a  treq_d  treq_h
+  - traffic  - tsize_a  tsize_d  tsize_h  tsize_c
+  " >&2
+    
+}
+
 # MAIN-PROGRAM FUNCTIONS
 
 function main (){
@@ -108,27 +130,38 @@ function main (){
         field_1 \
         field_2
 
+  # Load autocomplete
+
+  source "$(sys_workdir)/completion"
+
   # Throw to description if no options are passed
 
   if [[ -z "$@" ]]; then
     sys_description
   fi
 
+  # We just translate options to dasp
   # Get options - send directly to dasp and checked there
 
-  while getopts 's:f:o:rbh' flag; do
+  while getopts 's:f:o:M:t:bh' flag; do
     case "${flag}" in
-      s) OPTION_S="${OPTARG}"
-         readonly OPTION_S
+      s) OPTION_s="-s ${OPTARG}"
+         readonly OPTION_s
          ;;
-      f) OPTION_F="${OPTARG}"
-         readonly OPTION_F
+      f) OPTION_f="-f ${OPTARG}"
+         readonly OPTION_f
          ;;
-      o) OPTION_O="-o ${OPTARG}"
+      o) OPTION_o="-o ${OPTARG}"
          readonly OPTION_O
          ;;
-      b) OPTION_B="-b"
-         readonly OPTION_B
+      M) OPTION_M="-M ${OPTARG}"
+         readonly OPTION_M
+         ;;
+      t) OPTION_t="-t ${OPTARG}"
+         readonly OPTION_t
+         ;;
+      b) OPTION_b="-b"
+         readonly OPTION_b
          ;;
       h) sys_usage ;;
     esac
@@ -136,8 +169,9 @@ function main (){
 
   # Default options for apache logs (description is into dasp)
 
-  if [[ -z "${OPTION_F}" ]]; then
-    OPTION_F="access*"
+  if [[ -z "${OPTION_f}" ]]; then
+    OPTION_f="-f access*"
+    readonly OPTION_f
   fi
 
   # Get dates and reduce positional parametrs
@@ -155,16 +189,20 @@ function main (){
   
   if [[ "$#" != 0 ]]; then
     out="$("$(sys_workdir)"/dasp/dasp \
-      -s "${OPTION_S}" \
-      -f "${OPTION_F}" \
+      ${OPTION_s} \
+      ${OPTION_f} \
+      ${OPTION_o} \
+      ${OPTION_M} \
+      ${OPTION_t} \
+      ${OPTION_b} \
       -d " " \
       -w "[%d/%b/%Y:%H:%M:%S" \
       -k 4 \
-       ${OPTION_O} \
-       ${OPTION_B} \
       "${DATE_START}" "${DATE_END}" )"
   else
-    sys_usage
+    # echo "err: Choose one of the positional parametrs" >&2
+    sys_tip
+    sys_examples
   fi
 
   # Form total info from output (store in $stat )

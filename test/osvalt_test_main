@@ -24,8 +24,8 @@ sys_message (){
 
 # Prepare files
 
-touch -t "201703072359" access_aux9_my_2017_03_07.log.gz
-touch -t "201703082359" access_aux9_my_2017_03_08.log
+touch -t "201703072359" mock_data/access_aux9_my_2017_03_07.log.gz
+touch -t "201703082359" mock_data/access_aux9_my_2017_03_08.log
 
 # Testing case 1
 
@@ -43,7 +43,7 @@ sys_message "${assume}" "${items}"
 
 echo "Testing case 2"
 
-assume=24
+assume=25
 items=$(../osvalt -s mock_data/ \
               "2017-03-06 00:00:00" \
               "2017-03-09 23:59:59" \
@@ -55,7 +55,7 @@ sys_message "${assume}" "${items}"
 
 echo "Testing case 3"
 
-assume=31
+assume=32
 items=$(../osvalt -s mock_data/ \
               "2017-03-06 00:00:00" \
               "2017-03-09 23:59:59" \
