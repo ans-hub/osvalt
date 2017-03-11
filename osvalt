@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Osvalt (old-school viewer: apache log tool) - wrapper script for 
-# "dasp" script to simply getting apache access logs for any date range
+# Osvalt (old-school viewer: apache log tool) - wrapper for "dasp" 
+# script to simply getting apache access logs for any date range
 #
 # Style guide: https://google.github.io/styleguide/shell.xml
 #
@@ -46,7 +46,8 @@ function sys_usage() {
 
 function sys_description() {
 
-  echo "Osvalt (old-school viewer: apache logs tool) - bash script, that provides getting data for date range from apache access logs
+  echo "Osvalt (old-school viewer: apache logs tool) - bash script, that
+  provides getting data for date range from apache access logs
 
   For usage call: osvalt -h
   " | sed 's/^\s\s//' 1>&2
@@ -58,8 +59,9 @@ function sys_description() {
 
 function sys_copyright() {
 
-  echo "Version: 1.09
-  Contact: http://ans.sh or ans.novoselov@gmail.com"\
+  echo "Version:  1.09
+  Contact:  http://ans.sh
+  Copyright (c) 2017 Anton Novoselov"\
   | sed 's/^\s\s//' 1>&2
 
 }
