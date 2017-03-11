@@ -35,8 +35,7 @@ function sys_usage() {
     - linux commands over pipe: grep, tac, head, tail, etc.
   Or/and form statistic output:
     - requests - treq_a  treq_d  treq_h
-    - traffic  - tsize_a  tsize_d  tsize_h  tsize_c
-    " \
+    - traffic  - tsize_a  tsize_d  tsize_h  tsize_c" \
     | sed 's/^\s\s//' 1>&2
   
   echo ""
