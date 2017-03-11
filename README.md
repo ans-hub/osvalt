@@ -20,13 +20,13 @@ $ sudo ln -s ~/folder_with_osvalt/osvalt /usr/local/bin/osvalt
 
 ### Set alias to osvalt with options:
 ~~~~
-$ alias osvalt="osvalt -s path/to/logs "
+$ alias osvalt="osvalt -s path/to/logs"
 ~~~~
 ### Read built-in help for command usage:
 ~~~~
 $ osvalt -h
 ~~~~
-### Subsequent usage:
+### Usage examples:
 ~~~~
 # Show all logs for period
 $ osvalt "yesterday" "now" vall
@@ -48,15 +48,15 @@ $ osvalt "12:00" "13:00" fref uniq | grep -v "ans.sh"
 ~~~~
 ### Additional options to osvalt:
 
-You may use additional options to osvalt, such as:
-  - custom months (if your view of month in another language, for example)
-  - searching in logs only by file mtime
-  - using tmp file instead of var if you work with big data
-and some another useful options. 
+You may use an additional options to osvalt, such as:
+  - custom months (if month is present in logs in the another language, for example)
+  - searching in logs only by file modification time
+  - using temp file instead of var if you work with big data
+And some another useful options.
 
 ### Install completitions in two ways
 
-To load completions over .bashrc file put this lines to .bashrc file on your home dir:
+To load completions over .bashrc file, put this lines to .bashrc file on your home dir:
 ~~~~
 $ source path_to_osvalt_dir/completion
 ~~~~
@@ -69,5 +69,4 @@ To increase perfomance, you may:
 - use option -o for getting lines only from files from defined dates +- offset
 - use option -t for storing temp data in the temp file instead of variable 
 ## Known issues:
-
 Current version not working with time zones. If your logs written by timezone offset, you may use option -o for searching in files by date +- days offset.
