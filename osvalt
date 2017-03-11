@@ -39,7 +39,6 @@ function sys_usage() {
     " \
     | sed 's/^\s\s//' 1>&2
   
-  sys_examples
   echo ""
   sys_copyright
   
@@ -59,18 +58,9 @@ function sys_description() {
   exit 1
 }
 
-function sys_examples() {
-  echo "Examples:
-  - dates define \"today\", \"3 days ago\", \"now\", etc..
-  - who generate 404 code: \"freq fref fagent | grep \"^GET \wp-hd87.php\"
-  - pages with 303 and 503 code: \"fcode fip freq | grep \"^303\\|503\"
-  - show refferers without self domain \"fref uniq | grep -v \"ans.sh\"
-  - for total: add at the end of custom fields \"uniq\" for total"
-}
-
 function sys_copyright() {
 
-  echo "Version: 1.08
+  echo "Version: 1.09
   Contact: http://ans.sh or ans.novoselov@gmail.com"\
   | sed 's/^\s\s//' 1>&2
 
@@ -96,20 +86,21 @@ function sys_workdir() {
   echo "$dir"
 }
 
-function sys_tip() {
+function sys_error() {
+  [[ "$@" ]] && echo "err: $@" >&2
+  critical_error_flag="1"
+}
 
-  echo "First, form output:
-  - vall  vshort
-  - fip  fdate  ftype  furl  fhttp  fcode  fsize 
-  - freq  fref  fagent
-  Then, reduce output:
-  - built-in shortcuts: uniq
-  - linux commands over pipe: grep, tac, head, tail, etc.
-  Or/and form statistic output:
-  - requests - treq_a  treq_d  treq_h
-  - traffic  - tsize_a  tsize_d  tsize_h  tsize_c
-  " >&2
-    
+function sys_is_abort() {
+  if [[ "${critical_error_flag}" == 1 ]]; then
+    echo "tip: type ./osvalt -h for usage"
+    echo "exit"
+    exit 1
+  fi
+}
+
+function sys_tip() {
+  [[ "$@" ]] && echo "tip: $@" >&2
 }
 
 # MAIN-PROGRAM FUNCTIONS
@@ -130,9 +121,9 @@ function main (){
         field_1 \
         field_2
 
-  # Load autocomplete
+  # Globals
 
-  source "$(sys_workdir)/completion"
+  critical_error_flag=''
 
   # Throw to description if no options are passed
 
@@ -140,7 +131,6 @@ function main (){
     sys_description
   fi
 
-  # We just translate options to dasp
   # Get options - send directly to dasp and checked there
 
   while getopts 's:f:o:M:t:bh' flag; do
@@ -200,9 +190,9 @@ function main (){
       -k 4 \
       "${DATE_START}" "${DATE_END}" )"
   else
-    # echo "err: Choose one of the positional parametrs" >&2
-    sys_tip
-    sys_examples
+    sys_error "No argument were passed after date"
+    sys_tip "Use tab completition"
+    sys_is_abort
   fi
 
   # Form total info from output (store in $stat )
@@ -289,7 +279,6 @@ function main (){
             }
           ' )\n"
         ;;
-
     esac
   done
   
