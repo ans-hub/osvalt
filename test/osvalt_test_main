@@ -1,6 +1,7 @@
 #!/bin/bash
 # 
 # Osvalt test scenario for automated testing osvalt script
+# Version: 1.01
 #
 # Style guide: https://google.github.io/styleguide/shell.xml
 

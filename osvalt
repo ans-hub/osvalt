@@ -20,6 +20,7 @@ function sys_usage() {
     -f | access files pattern (def: access*)
     -o | search in files by mtime +- days count offset
     -M | user defined 12 months, separated by commas
+    -n | file from which takes date_start
     -t | use temp file for dasp instead of var (if perfomance issue)
     -b | debug
     -h | help
@@ -59,7 +60,7 @@ function sys_description() {
 
 function sys_copyright() {
 
-  echo "Version:  1.09
+  echo "Version:  1.10
   Contact:  http://ans.sh
   Copyright (c) 2017 Anton Novoselov"\
   | sed 's/^\s\s//' 1>&2
@@ -118,6 +119,7 @@ function main (){
         show \
         out \
         stat \
+        file_date \
         field_1 \
         field_2
 
@@ -133,7 +135,7 @@ function main (){
 
   # Get options - send directly to dasp and checked there
 
-  while getopts 's:f:o:M:t:bh' flag; do
+  while getopts 's:f:o:M:n:t:bh' flag; do
     case "${flag}" in
       s) OPTION_s="-s ${OPTARG}"
          readonly OPTION_s
@@ -146,6 +148,11 @@ function main (){
          ;;
       M) OPTION_M="-M ${OPTARG}"
          readonly OPTION_M
+         ;;
+      n) OPTION_n="-n ${OPTARG}"
+         readonly OPTION_n
+         DATE_FILE="${OPTARG}"
+         readonly DATE_FILE
          ;;
       t) OPTION_t="-t ${OPTARG}"
          readonly OPTION_t
@@ -164,33 +171,38 @@ function main (){
     readonly OPTION_f
   fi
 
-  # Get dates and reduce positional parametrs
+  # Get dates and reduce positional parametrs, if no option -n
 
   shift "$((OPTIND-1))"
   
-  DATE_START="$1"
-  readonly DATE_START
-  DATE_END="$2"
-  readonly DATE_END
-
-  shift "2"
+  if [[ -z "${OPTION_n}" ]]; then
+    DATE_START="$1"
+    readonly DATE_START
+    DATE_END="$2"
+    readonly DATE_END
+    shift "2"
+  else
+    DATE_START=""
+    DATE_END=""
+  fi
   
   # Execute dasp (store in $out)
   
   if [[ "$#" != 0 ]]; then
-    out="$("$(sys_workdir)"/dasp/dasp \
+    out="$("$(sys_workdir)"/dasp \
       ${OPTION_s} \
       ${OPTION_f} \
       ${OPTION_o} \
       ${OPTION_M} \
       ${OPTION_t} \
+      ${OPTION_n} \
       ${OPTION_b} \
       -d " " \
       -w "[%d/%b/%Y:%H:%M:%S" \
       -k 4 \
       "${DATE_START}" "${DATE_END}" )"
   else
-    sys_error "No argument were passed after date"
+    sys_error "No positional parametrs were passed after options"
     sys_tip "Use tab completition"
     sys_is_abort
   fi
@@ -388,6 +400,14 @@ function main (){
     echo -e "${out}"
   fi
   
+  # Prepare dates for total output
+
+  if [[ -n "${OPTION_n}" ]]; then
+    file_date="$(stat -c %Y ${DATE_FILE})"
+    DATE_START="$(date -d "@${file_date}" "+%Y-%m-%d %H:%M:%S")"
+    DATE_END="now"
+  fi
+
   # Show total from $stat
   
   if [[ -n "${stat}" ]]; then

@@ -1,8 +1,36 @@
 # Osvalt (Old-school viewer: apache log tool)
 
-Bash script that perform getting apache access logs data for any period in easy way.
+## Description:
 
-### Install script
+Every time when I came back to one of the servers, where my sites is placed, I had imagined command like this:
+~~~~
+$ show_me_logs_of_siteN_for_period_and_only_some_fields
+~~~~
+or this:
+~~~~
+$ show_me_logs_of_siteN_for_2_hours_ago_and_who_are_there_generate_404_error
+~~~~
+Of course, my next steps was is doing routines by `find`, `awk`, `sed` and other, then solving the problems like comparing dates Jul and Aug and others. And once upon a time I wrote the 
+bash script that perform getting apache access logs data for any period in easy way.
+
+As result my dream embodied in command like this:
+~~~~
+$ osvalt "2 hours ago" "now" fip uniq
+~~~~
+or (if I want to monitoring some activity for periods) such command has been called by cron:
+~~~~
+$ osvalt "10 minutes ago" "now" fcode fip furl uniq | grep " 404 " | mail --subject="Check" mon@ans.sh
+~~~~
+
+## File descriptions:
+
+- `osvalt`      - main script that provides data filtering
+
+- `dasp`        - helper script that provides getting data from apache logs for any period
+
+- `completion`  - script with autocomplete function
+
+## Install script:
 ~~~~
 git clone https://github.com/ans-hub/osvalt.git
 ~~~~
@@ -26,7 +54,7 @@ $ alias osvalt="osvalt -s path/to/logs"
 ~~~~
 $ osvalt -h
 ~~~~
-### Usage examples:
+## Usage examples:
 ~~~~
 # Show all logs for period
 $ osvalt "yesterday" "now" vall
@@ -46,7 +74,7 @@ $ osvalt "2 days ago" "now" fcode fip freq | grep "^303\|503"
 # Show refferers without self domain
 $ osvalt "12:00" "13:00" fref uniq | grep -v "ans.sh" 
 ~~~~
-### Additional options to osvalt:
+## Additional options to osvalt:
 
 You may use an additional options to osvalt, such as:
   - custom months (if month is present in logs in the another language, for example)
@@ -54,7 +82,7 @@ You may use an additional options to osvalt, such as:
   - using temp file instead of var if you work with big data
 And some another useful options.
 
-### Install completitions in two ways
+## Install completitions in two ways
 
 To load completions over .bashrc file, put this lines to .bashrc file on your home dir:
 ~~~~
@@ -67,6 +95,7 @@ $ cp path_to_osvalt_dir/completion /etc/bash_completion.d/
 ## Perfomance issues:
 To increase perfomance, you may:
 - use option -o for getting lines only from files from defined dates +- offset
-- use option -t for storing temp data in the temp file instead of variable 
+- use option -t for storing temp data in the temp file instead of variable
+- use option -n to take start_date info from file
 ## Known issues:
 Current version not working with time zones. If your logs written by timezone offset, you may use option -o for searching in files by date +- days offset.
