@@ -35,6 +35,11 @@ $ osvalt "10 minutes ago" "now" fcode fip furl uniq | grep " 404 " | mail --subj
 git clone https://github.com/ans-hub/osvalt.git
 ~~~~
 
+### Be sure that all works fine:
+~~~~
+$ cd osvalt_dir/test
+$ ./osvalt_test_main
+~~~~
 ### Make script executable:
 ~~~~
 $ chmod +x osvalt
@@ -44,12 +49,17 @@ $ chmod +x osvalt
 ~~~~ 
 $ sudo ln -s ~/folder_with_osvalt/osvalt /usr/local/bin/osvalt
 ~~~~
+If you haven't access to /usr/local/bin/ or any directory from PATH, you may create any dir, for example, `~/bin/`, and add this dir to path via `.bashrc`:
+~~~~
+$ PATH="${PATH}:~/bin/"
+~~~~
 *Note: in next steps all code writed without "./", as if you have performed command above.*
-
 ### Set alias to osvalt with options:
 ~~~~
-$ alias osvalt="osvalt -s path/to/logs"
+$ alias osvalt="osvalt -s path/to/logs -o 2"
 ~~~~
+*Note: if modification time of your files in `path/to/logs` directory is not corresponds to dates in files, for example, this is old archive, then you must remove -o option.
+
 ### Read built-in help for command usage:
 ~~~~
 $ osvalt -h
