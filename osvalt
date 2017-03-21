@@ -60,7 +60,7 @@ function sys_description() {
 
 function sys_copyright() {
 
-  echo "Version:  1.10
+  echo "Version:  1.11
   Contact:  http://ans.sh
   Copyright (c) 2017 Anton Novoselov"\
   | sed 's/^\s\s//' 1>&2
@@ -353,31 +353,39 @@ function main (){
   if [[ -n "${field_1}" || -n "${field_2}" ]]; then
 
     out="$( echo -n "${out}" | awk \
+    -F " " \
     -v FIELD_1="${field_1}" \
     -v FIELD_2="${field_2}" \
     '
     BEGIN {
       split (FIELD_1, field_view_1, ";");
       split (FIELD_2, field_view_2, ";");
+      
+      # Clear from empty values
+
+      arrlen_1 = 0;
+      for (k in field_view_1) {
+        if (field_view_1[k] == "") { delete field_view_1[k] } else { arrlen_1++; }
+      }
+      
+      arrlen_2 = 0;
+      for (k in field_view_2) {
+        if (field_view_2[k] == "") { delete field_view_2[k] } else { arrlen_2++; }
+      }
+
     }
     {
       split ($0, view_1, "[\040]");
       split ($0, view_2, "[\042]");
 
-      result = ""
+      result = " ";
 
-      cnt = 0;
-      for (k in field_view_1) { cnt++ }
-      
-      for (k = 0; k < cnt; k++) {
-        result = result "" view_1[field_view_1[k]] FS;
+      for (k = 1; k <= arrlen_1; k++) {          # k = 1 as writed in awk man while split
+        result = result view_1[field_view_1[k]] FS;
       }
 
-      cnt = 0;
-      for (k in field_view_2) { cnt++ }
-      
-      for (k = 0; k < cnt; k++) {
-        result = result "" view_2[field_view_2[k]] FS;
+      for (k = 1; k <= arrlen_2; k++) {
+        result = result "\"" view_2[field_view_2[k]] "\"" FS;
       }
  
       sub  (/ /, "", result);
