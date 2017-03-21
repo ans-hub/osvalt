@@ -366,12 +366,18 @@ function main (){
 
       result = ""
 
-      for (k in field_view_1) {
-        result = result FS view_1[field_view_1[k]];
+      cnt = 0;
+      for (k in field_view_1) { cnt++ }
+      
+      for (k = 0; k < cnt; k++) {
+        result = result "" view_1[field_view_1[k]] FS;
       }
 
-      for (k in field_view_2) {
-        result = result FS view_2[field_view_2[k]];
+      cnt = 0;
+      for (k in field_view_2) { cnt++ }
+      
+      for (k = 0; k < cnt; k++) {
+        result = result "" view_2[field_view_2[k]] FS;
       }
  
       sub  (/ /, "", result);
