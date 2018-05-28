@@ -1,0 +1,58 @@
+#!/bin/bash
+#
+# Script is runned by crontab and send apache's and site's logs for period from
+# last crontab call to now. The date of last crontab call is taken from date
+# of tmp_logs.log file. This file is stores output of osvalt and dasp for 
+# further sending of data.
+#
+#_____________________________________________________________________________)_
+
+# Setup output files
+
+LOGS=~/scripts/tmp_logs.log
+
+if [ ! -e "${LOGS}" ]
+then
+  touch "${LOGS}"
+fi
+
+# Get last access date to log file. This date would be a start date of getting
+# logs
+
+STAT=@"$(stat -c %Y ${LOGS})"
+DATE_START="$(date -d "${STAT}" "+%Y-%m-%d %H:%M:%S")"
+DATE_END="now"
+
+# Clear log file
+
+rm -rf "${LOGS}"
+touch "${LOGS}"
+
+# Show apache logs in short format (without trash like ico, css, ...)
+
+echo -e "Apache logs from ${DATE_START}:" >> "${LOGS}"
+~/bin/osvalt -s ~/logs/ \
+             -o 2 \
+             -t ~/.osvalt_tmp~ \
+             "${DATE_START}" "${DATE_END}" \
+             vshort | \
+             grep -vE "*.png|*.js|*.css|*.ico|robots.txt" \
+             >> "${LOGS}"
+
+# Show site log
+
+echo -e "\nCmd logs from ${DATE_START}:" >> "${LOGS}"
+~/bin/dasp -s ~/http/log \
+           -f "cmd*" \
+           -d " " \
+           -k "2&3" \
+           -w "%Y-%m-%d %H:%M:%S" \
+           -o 2 \
+           -t ~/.dasp_tmp~ \
+           "${DATE_START}" "${DATE_END}" \
+           >> "${LOGS}"
+
+# Send mail
+
+mutt -s "Everyday logs" iam@mymail.com < "${LOGS}"
+rm -rf "${LOGS}"
